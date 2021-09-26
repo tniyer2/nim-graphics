@@ -7,11 +7,13 @@ type
 
 
 proc framebufferSizeProc(window: GLFWwindow, width: int32, height: int32
-                        ) : void {.cdecl.} = 
+                        ) : void {.cdecl.} =
+    # Resize Viewport
     glViewport(0, 0, width, height)
 
 
 proc inputProc(window: GLFWWindow): void =
+  # Close Window if Esc.
   if window.getKey(GLFWKey.ESCAPE) == GLFWPress:
     window.setWindowShouldClose(true)
 
