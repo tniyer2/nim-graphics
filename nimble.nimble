@@ -5,7 +5,7 @@ author        = "tniyer2"
 description   = "A new awesome nimble package"
 license       = "Proprietary"
 srcDir        = "src"
-bin           = @["template_dcc"]
+bin           = @["main"]
 
 
 # Dependencies
