@@ -77,12 +77,12 @@ proc loadMeshIntoOpenGL(vertices_address: pointer, vertices_length: int,
 
 proc drawTriangles(mesh: var Mesh) =
   glBindVertexArray(mesh.vao)
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo)
   glDrawElements(GL_TRIANGLES, cast[GLsizei](mesh.indices_length), GL_UNSIGNED_INT, nil)
 
 proc destroy(mesh: var Mesh) =
   glDeleteVertexArrays(1'i32, addr(mesh.vao))
   glDeleteBuffers(1'i32, addr(mesh.vbo))
+  glDeleteBuffers(1'i32, addr(mesh.ebo))
 
 
 proc main() =
