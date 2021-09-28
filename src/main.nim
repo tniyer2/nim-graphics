@@ -33,7 +33,7 @@ proc loadAndCompileShader(path: string, type_of_shader: GLenum): GLuint =
   if success != ord(GL_TRUE):
     const log_size: int32 = 1024
     var log: array[log_size, char]
-    glGetShaderInfoLog(id, log_size, nil, addr(log));
+    glGetShaderInfoLog(id, log_size, nil, addr(log))
 
     let s: string =
       case type_of_shader
@@ -46,23 +46,29 @@ proc loadAndCompileShader(path: string, type_of_shader: GLenum): GLuint =
   id
 
 
-type Mesh = tuple[vao, vbo: GLuint, length: int]
+type Mesh = tuple[vao, vbo, ebo: GLuint, vertices_length, indices_length: int]
 
-proc loadMeshIntoOpenGL(address: pointer, length: int): Mesh =
-  assert length mod 3 == 0
+proc loadMeshIntoOpenGL(vertices_address: pointer, vertices_length: int,
+                        indices_address: pointer, indices_length: int): Mesh =
+  assert vertices_length mod 3 == 0
+  assert indices_length mod 3 == 0
 
-  var mesh: Mesh = (0'u32, 0'u32, length)
+  var mesh: Mesh = (0'u32, 0'u32, 0'u32, vertices_length, indices_length)
 
   glGenVertexArrays(1'i32, addr(mesh.vao))
   glGenBuffers(1'i32, addr(mesh.vbo))
+  glGenBuffers(1'i32, addr(mesh.ebo))
 
   glBindVertexArray(mesh.vao)
 
   glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo)
-  glBufferData(GL_ARRAY_BUFFER, length * sizeof(float32) * 3, address, GL_STATIC_DRAW)
+  glBufferData(GL_ARRAY_BUFFER, vertices_length * sizeof(float32), vertices_address, GL_STATIC_DRAW)
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo)
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_length * sizeof(uint32), indices_address, GL_STATIC_DRAW)
 
   glVertexAttribPointer(0'u32, 3'i32, EGL_FLOAT, false, sizeof(GLfloat) * 3, nil)
-  glEnableVertexAttribArray(0'u32);
+  glEnableVertexAttribArray(0'u32)
 
   glBindBuffer(GL_ARRAY_BUFFER, 0'u32)
   glBindVertexArray(0'u32)
@@ -71,7 +77,8 @@ proc loadMeshIntoOpenGL(address: pointer, length: int): Mesh =
 
 proc drawTriangles(mesh: var Mesh) =
   glBindVertexArray(mesh.vao)
-  glDrawArrays(GL_TRIANGLES, 0'i32, cast[GLsizei](mesh.length div 3'i32))
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo)
+  glDrawElements(GL_TRIANGLES, cast[GLsizei](mesh.indices_length), GL_UNSIGNED_INT, nil)
 
 proc destroy(mesh: var Mesh) =
   glDeleteVertexArrays(1'i32, addr(mesh.vao))
@@ -150,15 +157,18 @@ proc main() =
 
   # Set Up Vertex Data
   var mesh = block:
-    var vertices = [
-      -0.5'f32, -0.5'f32,  0.0'f32,
-       0.5'f32, -0.5'f32,  0.0'f32,
-       0.0'f32,  0.5'f32,  0.0'f32,
-       0.0'f32, -0.75'f32, 0.0'f32,
-       0.5'f32,  0.25'f32, 0.0'f32,
-      -0.5'f32,  0.25'f32, 0.0'f32
-    ]
-    loadMeshIntoOpenGL(addr(vertices), len(vertices))
+    var
+      vertices = [
+         0.5'f32,  0.5'f32, 0.0'f32,
+         0.5'f32, -0.5'f32, 0.0'f32,
+        -0.5'f32, -0.5'f32, 0.0'f32,
+        -0.5'f32,  0.5'f32, 0.0'f32
+      ]
+      indices = [
+        0'u32, 1'u32, 3'u32,
+        1'u32, 2'u32, 3'u32
+      ]
+    loadMeshIntoOpenGL(addr(vertices), len(vertices), addr(indices), len(indices))
 
 
   # Run Game Loop
