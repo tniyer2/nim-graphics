@@ -6,8 +6,14 @@ import glm/[vec, mat, mat_transform]
 type Color = tuple[r, g, b, a: GLfloat]
 
 
+var
+  window_width: int32 = 800
+  window_height: int32 = 600
+
 proc framebufferSizeProc(window: GLFWwindow, width: int32, height: int32
                         ) : void {.cdecl.} =
+  window_width = width
+  window_height = height
   # Resize Viewport
   glViewport(0, 0, width, height)
 
@@ -86,32 +92,34 @@ proc use(program: var ShaderProgram): void =
 proc destroy(program: var ShaderProgram): void =
   glDeleteProgram(program.id)
 
-proc setTransform(program: var ShaderProgram, transform: Mat4): void =
-  var transform = transform
-  let location: int32 = glGetUniformLocation(program.id, "transform")
-  glUniformMatrix4fv(location, 1'i32, false, caddr(transform))
+proc setMat4Uniform(program: var ShaderProgram, uniform_name: cstring, matrix: Mat4): void =
+  var matrix = matrix
+  let location: int32 = glGetUniformLocation(program.id, uniform_name)
+  glUniformMatrix4fv(location, 1'i32, false, caddr(matrix))
 
 
-type Mesh = tuple[vao, vbo, ebo: GLuint, vertices_length, indices_length: int]
+type Mesh = tuple[vao, vbo, ebo: GLuint, vertices_length, indices_length: int, uses_indices: bool, transform: Mat4f]
 
 proc loadMeshIntoOpenGL(vertices_address: pointer, vertices_length: int,
                         indices_address: pointer, indices_length: int): Mesh =
   assert vertices_length mod 3 == 0
-  assert indices_length mod 3 == 0
+  assert indices_address == nil or indices_length mod 3 == 0
 
-  var mesh: Mesh = (0'u32, 0'u32, 0'u32, vertices_length, indices_length)
+  var mesh: Mesh = (0'u32, 0'u32, 0'u32, vertices_length, indices_length, indices_address != nil, mat4f(1.0f))
 
   glGenVertexArrays(1'i32, addr(mesh.vao))
   glGenBuffers(1'i32, addr(mesh.vbo))
-  glGenBuffers(1'i32, addr(mesh.ebo))
+  if mesh.uses_indices:
+    glGenBuffers(1'i32, addr(mesh.ebo))
 
   glBindVertexArray(mesh.vao)
 
   glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo)
   glBufferData(GL_ARRAY_BUFFER, vertices_length * sizeof(float32), vertices_address, GL_STATIC_DRAW)
 
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo)
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_length * sizeof(uint32), indices_address, GL_STATIC_DRAW)
+  if mesh.uses_indices:
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo)
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_length * sizeof(uint32), indices_address, GL_STATIC_DRAW)
 
   glVertexAttribPointer(0'u32, 3'i32, EGL_FLOAT, false, sizeof(GLfloat) * 3, nil)
   glEnableVertexAttribArray(0'u32)
@@ -123,19 +131,21 @@ proc loadMeshIntoOpenGL(vertices_address: pointer, vertices_length: int,
 
 proc drawTriangles(mesh: var Mesh) =
   glBindVertexArray(mesh.vao)
-  glDrawElements(GL_TRIANGLES, cast[GLsizei](mesh.indices_length), GL_UNSIGNED_INT, nil)
+  if mesh.uses_indices:
+    glDrawElements(GL_TRIANGLES, cast[GLsizei](mesh.indices_length), GL_UNSIGNED_INT, nil)
+  else:
+    glDrawArrays(GL_TRIANGLES, 0'i32, cast[GLsizei](mesh.vertices_length div 3'i32))
 
 proc destroy(mesh: var Mesh) =
   glDeleteVertexArrays(1'i32, addr(mesh.vao))
   glDeleteBuffers(1'i32, addr(mesh.vbo))
-  glDeleteBuffers(1'i32, addr(mesh.ebo))
+  if mesh.uses_indices:
+    glDeleteBuffers(1'i32, addr(mesh.ebo))
 
 
 proc main() =
   # Declare Constants
   const
-    window_width: int32 = 800
-    window_height: int32 = 600
     window_title: cstring = "Template DCC"
     clear_color: Color = (0.68'f32, 1.0'f32, 0.34'f32, 1.0'f32)
     vertex_shader_path: string = "shaders/default.vs"
@@ -180,16 +190,49 @@ proc main() =
   var mesh = block:
     var
       vertices = [
-         0.5'f32,  0.5'f32, 0.0'f32,
-         0.5'f32, -0.5'f32, 0.0'f32,
-        -0.5'f32, -0.5'f32, 0.0'f32,
-        -0.5'f32,  0.5'f32, 0.0'f32
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+        -0.5f,  0.5f, -0.5f,
+
+        -0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f, 
+         0.5f,  0.5f,  0.5f, 
+         0.5f,  0.5f,  0.5f, 
+        -0.5f,  0.5f,  0.5f,
+        -0.5f, -0.5f,  0.5f,
+
+        -0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+
+        0.5f,  0.5f,  0.5f,
+        0.5f,  0.5f, -0.5f,
+        0.5f, -0.5f, -0.5f,
+        0.5f, -0.5f, -0.5f,
+        0.5f, -0.5f,  0.5f,
+        0.5f,  0.5f,  0.5f,
+
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+        -0.5f, -0.5f,  0.5f,
+        -0.5f, -0.5f, -0.5f,
+
+        -0.5f,  0.5f, -0.5f, 
+         0.5f,  0.5f, -0.5f, 
+         0.5f,  0.5f,  0.5f, 
+         0.5f,  0.5f,  0.5f, 
+        -0.5f,  0.5f,  0.5f, 
+        -0.5f,  0.5f, -0.5f,
       ]
-      indices = [
-        0'u32, 1'u32, 3'u32,
-        1'u32, 2'u32, 3'u32
-      ]
-    loadMeshIntoOpenGL(addr(vertices), len(vertices), addr(indices), len(indices))
+    loadMeshIntoOpenGL(addr(vertices), len(vertices), nil, 0)
 
 
   # Run Game Loop
@@ -202,10 +245,19 @@ proc main() =
       glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a)
       glClear(GL_COLOR_BUFFER_BIT)
 
+      # Set Up Projection and View Transforms
+      let proj = perspective(
+        radians(45.0f),
+        window_width / window_height,
+        0.1f, 100.0f)
+      let view = mat4f(1.0f)
+        .translate(vec3(0f, 0f, -5.0f))
+        .rotate(radians(45.0f), vec3(1.0f, 1.0f, 1.0f))
+
       shaderProgram.use()
-      shaderProgram.setTransform(
-        mat4f(1.0f).translate(vec3(1f, 0f, 0f))
-      )
+      shaderProgram.setMat4Uniform("projection", proj)
+      shaderProgram.setMat4Uniform("view", view)
+      shaderProgram.setMat4Uniform("model", mesh.transform)
       mesh.drawTriangles()
 
       window.swapBuffers()
