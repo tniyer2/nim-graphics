@@ -12,3 +12,4 @@ bin           = @["main"]
 
 requires "nim >= 1.4.8"
 requires "nimgl >= 1.0.0"
+requires "glm >= 1.1.0"

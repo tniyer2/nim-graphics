@@ -1,5 +1,6 @@
 
 import nimgl/[glfw, opengl]
+import glm/[vec, mat, mat_transform]
 
 
 type Color = tuple[r, g, b, a: GLfloat]
@@ -84,6 +85,11 @@ proc use(program: var ShaderProgram): void =
 
 proc destroy(program: var ShaderProgram): void =
   glDeleteProgram(program.id)
+
+proc setTransform(program: var ShaderProgram, transform: Mat4): void =
+  var transform = transform
+  let location: int32 = glGetUniformLocation(program.id, "transform")
+  glUniformMatrix4fv(location, 1'i32, false, caddr(transform))
 
 
 type Mesh = tuple[vao, vbo, ebo: GLuint, vertices_length, indices_length: int]
@@ -197,6 +203,9 @@ proc main() =
       glClear(GL_COLOR_BUFFER_BIT)
 
       shaderProgram.use()
+      shaderProgram.setTransform(
+        mat4f(1.0f).translate(vec3(1f, 0f, 0f))
+      )
       mesh.drawTriangles()
 
       window.swapBuffers()
