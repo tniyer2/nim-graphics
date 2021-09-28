@@ -16,6 +16,9 @@ proc inputProc(window: GLFWWindow): void =
     window.setWindowShouldClose(true)
 
 
+type ShaderProgram = tuple[id: GLuint]
+
+# Load and Compile a Shader
 proc loadAndCompileShader(path: string, type_of_shader: GLenum): GLuint =
   # Read shader source code from File
   var source: cstring = readFile(path)
@@ -44,6 +47,43 @@ proc loadAndCompileShader(path: string, type_of_shader: GLenum): GLuint =
     echo cast[cstring](addr(log))
   
   id
+
+# Load, Compile, and Link the Vertex and Fragment Shaders
+proc createShaderProgram(vertex_shader_path: string, fragment_shader_path: string): ShaderProgram =
+  # Load and Compile Shaders
+  let vso = loadAndCompileShader(vertex_shader_path, GL_VERTEX_SHADER)
+  let fso = loadAndCompileShader(fragment_shader_path, GL_FRAGMENT_SHADER)
+
+  # Create the Shader Program
+  let program: ShaderProgram = (id: glCreateProgram())
+
+  # Link the Shader Objects
+  glAttachShader(program.id, vso)
+  glAttachShader(program.id, fso)
+  glLinkProgram(program.id)
+
+  # Report any Linking Errors
+  var success: GLint
+  glGetProgramiv(program.id, GL_LINK_STATUS, addr(success))
+  if success != ord(GL_TRUE):
+    const log_size: int32 = 1024
+    var log: array[log_size, char]
+    glGetProgramInfoLog(program.id, log_size, nil, addr(log))
+
+    echo "ERROR::SHADER::PROGRAM::LINKING_FAILED\n"
+    echo cast[cstring](addr(log))
+
+  # Delete the Shader Objects (no longer needed)
+  glDeleteShader(vso)
+  glDeleteShader(fso)
+
+  program
+
+proc use(program: var ShaderProgram): void =
+  glUseProgram(program.id)
+
+proc destroy(program: var ShaderProgram): void =
+  glDeleteProgram(program.id)
 
 
 type Mesh = tuple[vao, vbo, ebo: GLuint, vertices_length, indices_length: int]
@@ -126,33 +166,8 @@ proc main() =
   assert glInit()
 
 
-  # Load, Compile, and Link the Vertex and Fragment Shaders
-  let po = block:
-    # Load and Compile Shaders
-    let vso = loadAndCompileShader(vertex_shader_path, GL_VERTEX_SHADER)
-    let fso = loadAndCompileShader(fragment_shader_path, GL_FRAGMENT_SHADER)
-
-    # Link the Shader Objects
-    let po = glCreateProgram()
-    glAttachShader(po, vso)
-    glAttachShader(po, fso)
-    glLinkProgram(po)
-
-    # Report any Linking Errors
-    var success: GLint
-    glGetProgramiv(po, GL_LINK_STATUS, addr(success))
-    if success != ord(GL_TRUE):
-      const log_size: int32 = 1024
-      var log: array[log_size, char]
-      glGetProgramInfoLog(po, log_size, nil, addr(log))
-
-      echo "ERROR::SHADER::PROGRAM::LINKING_FAILED\n"
-      echo cast[cstring](addr(log))
-
-    # Delete the Shader Objects
-    glDeleteShader(vso)
-    glDeleteShader(fso)
-    po
+  # Create a Shader Program
+  var shaderProgram = createShaderProgram(vertex_shader_path, fragment_shader_path)
 
 
   # Set Up Vertex Data
@@ -181,7 +196,7 @@ proc main() =
       glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a)
       glClear(GL_COLOR_BUFFER_BIT)
 
-      glUseProgram(po)
+      shaderProgram.use()
       mesh.drawTriangles()
 
       window.swapBuffers()
@@ -190,7 +205,7 @@ proc main() =
 
   # Clean Up OpenGL
   mesh.destroy()
-  glDeleteProgram(po)
+  shaderProgram.destroy()
 
   # Clean Up GLFW
   window.destroyWindow()
