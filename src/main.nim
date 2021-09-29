@@ -1,7 +1,7 @@
 
 import nimgl/[glfw, opengl]
 import glm/[vec, mat, mat_transform]
-
+import bitops
 
 type Color = tuple[r, g, b, a: GLfloat]
 
@@ -96,6 +96,11 @@ proc setMat4Uniform(program: var ShaderProgram, uniform_name: cstring, matrix: M
   var matrix = matrix
   let location: int32 = glGetUniformLocation(program.id, uniform_name)
   glUniformMatrix4fv(location, 1'i32, false, caddr(matrix))
+
+proc setVec3Uniform(program: var ShaderProgram, uniform_name: cstring, vector: Vec3): void =
+  var vector = vector
+  let location: int32 = glGetUniformLocation(program.id, uniform_name)
+  glUniform3f(location, vector.x, vector.y, vector.z)
 
 
 type Mesh = tuple[vao, vbo, ebo: GLuint, vertices_length, indices_length: int, uses_indices: bool, transform: Mat4f]
@@ -235,6 +240,8 @@ proc main() =
     loadMeshIntoOpenGL(addr(vertices), len(vertices), nil, 0)
 
 
+  glEnable(GL_DEPTH_TEST)
+
   # Run Game Loop
   while not window.windowShouldClose:
     # Run Frame
@@ -243,7 +250,7 @@ proc main() =
 
       # Set Background Color and Display
       glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a)
-      glClear(GL_COLOR_BUFFER_BIT)
+      glClear(cast[GLbitfield](bitor(cast[uint32](GL_COLOR_BUFFER_BIT), cast[uint32](GL_DEPTH_BUFFER_BIT))))
 
       # Set Up Projection and View Transforms
       let proj = perspective(
@@ -258,6 +265,13 @@ proc main() =
       shaderProgram.setMat4Uniform("projection", proj)
       shaderProgram.setMat4Uniform("view", view)
       shaderProgram.setMat4Uniform("model", mesh.transform)
+
+      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+      shaderProgram.setVec3Uniform("color", vec3(1.0f, 0.0f, 0.25f))
+      mesh.drawTriangles()
+      
+      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+      shaderProgram.setVec3Uniform("color", vec3(0f, 0f, 0f))
       mesh.drawTriangles()
 
       window.swapBuffers()
