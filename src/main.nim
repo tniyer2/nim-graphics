@@ -3,24 +3,40 @@ import nimgl/[glfw, opengl]
 import glm/[vec, mat, mat_transform]
 import bitops
 
+
 type Color = tuple[r, g, b, a: GLfloat]
 
 
-var
-  window_width: int32 = 800
-  window_height: int32 = 600
+type Window = tuple[width, height: int32, title: cstring, glfw: GLFWWindow]
 
-proc framebufferSizeProc(window: GLFWwindow, width: int32, height: int32
+proc framebufferSizeProc(window: GLFWwindow, width, height: int32
                         ) : void {.cdecl.} =
-  window_width = width
-  window_height = height
+  # Update User Window's Width and Height Fields
+  var window: ptr Window = cast[ptr Window](window.getWindowUserPointer())
+  window.width = width
+  window.height = height
+
   # Resize Viewport
   glViewport(0, 0, width, height)
 
-proc inputProc(window: GLFWWindow): void =
+proc createWindow(window: var Window): void =
+  let glfw: GLFWWindow =
+    glfwCreateWindow(window.width, window.height, window.title)
+
+  if glfw == nil:
+    echo "Failed to create a GLFW window."
+    glfwTerminate()
+    quit(-1)
+
+  glfw.setWindowUserPointer(addr(window))
+  window.glfw = glfw
+
+  glfw.makeContextCurrent()
+
+proc processInput(window: var Window): void =
   # Close Window if Esc.
-  if window.getKey(GLFWKey.ESCAPE) == GLFWPress:
-    window.setWindowShouldClose(true)
+  if window.glfw.getKey(GLFWKey.ESCAPE) == GLFWPress:
+    window.glfw.setWindowShouldClose(true)
 
 
 type ShaderProgram = tuple[id: GLuint]
@@ -151,6 +167,8 @@ proc destroy(mesh: var Mesh) =
 proc main() =
   # Declare Constants
   const
+    window_width: int32 = 800
+    window_height: int32 = 600
     window_title: cstring = "Template DCC"
     clear_color: Color = (0.68'f32, 1.0'f32, 0.34'f32, 1.0'f32)
     vertex_shader_path: string = "shaders/default.vs"
@@ -168,19 +186,9 @@ proc main() =
 
 
   # Create and Initialize a Window
-  let window = block:
-    let w: GLFWWindow =
-      glfwCreateWindow(window_width, window_height, window_title)
-
-    if w == nil:
-      echo "Failed to create a GLFW window."
-      glfwTerminate()
-      quit(-1)
-
-    w.makeContextCurrent()
-  
-    discard w.setFramebufferSizeCallback(framebufferSizeProc)
-    w
+  var window: Window = (window_width, window_height, window_title, nil)
+  createWindow(window)
+  discard window.glfw.setFramebufferSizeCallback(framebufferSizeProc)
 
 
   # Load OpenGL. Implemented by nimgl, doesn't use GLAD.
@@ -242,20 +250,22 @@ proc main() =
 
   glEnable(GL_DEPTH_TEST)
 
+
   # Run Game Loop
-  while not window.windowShouldClose:
+  while not window.glfw.windowShouldClose():
     # Run Frame
     block:
-      inputProc(window) # Process Input
+      window.processInput()
 
       # Set Background Color and Display
       glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a)
       glClear(cast[GLbitfield](bitor(cast[uint32](GL_COLOR_BUFFER_BIT), cast[uint32](GL_DEPTH_BUFFER_BIT))))
 
+
       # Set Up Projection and View Transforms
       let proj = perspective(
         radians(45.0f),
-        window_width / window_height,
+        window.width / window.height,
         0.1f, 100.0f)
       let view = mat4f(1.0f)
         .translate(vec3(0f, 0f, -5.0f))
@@ -274,16 +284,18 @@ proc main() =
       shaderProgram.setVec3Uniform("color", vec3(0f, 0f, 0f))
       mesh.drawTriangles()
 
-      window.swapBuffers()
+
+      window.glfw.swapBuffers()
 
       glfwPollEvents() # Process Events Sent from OS
+
 
   # Clean Up OpenGL
   mesh.destroy()
   shaderProgram.destroy()
 
   # Clean Up GLFW
-  window.destroyWindow()
+  window.glfw.destroyWindow()
   glfwTerminate()
 
 
