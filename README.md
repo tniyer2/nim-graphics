@@ -1,2 +1,2 @@
-# template-dcc
-A DCC using templates.
+# Graphics
+Renders a triangle.
