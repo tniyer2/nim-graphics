@@ -1,2 +1,2 @@
 # Graphics
-Renders a triangle.
+Renders a cube.
